@@ -1,7 +1,7 @@
 defmodule MissedUWeb.UserRegistrationLive do
   use MissedUWeb, :live_view
 
-  alias MissedU.Accounts
+  alias MissedU.{Accounts, Connections}
   alias MissedU.Accounts.User
 
   def render(assigns) do
@@ -31,6 +31,8 @@ defmodule MissedUWeb.UserRegistrationLive do
           Oops, something went wrong! Please check the errors below.
         </.error>
 
+        <%!-- NOTE: @form built from User changeset. Name field not present on changeset --%>
+        <.input field={@form[:name]} type="text" label="Name" required />
         <.input field={@form[:email]} type="email" label="Email" required />
         <.input field={@form[:password]} type="password" label="Password" required />
 
@@ -54,6 +56,8 @@ defmodule MissedUWeb.UserRegistrationLive do
   end
 
   def handle_event("save", %{"user" => user_params}, socket) do
+    # 1. TODO: Register user and make profile in transaction
+
     case Accounts.register_user(user_params) do
       {:ok, user} ->
         {:ok, _} =
@@ -61,6 +65,8 @@ defmodule MissedUWeb.UserRegistrationLive do
             user,
             &url(~p"/users/confirm/#{&1}")
           )
+
+        {:ok, _profile} = Connections.create_profile(user, user_params) # 1.
 
         changeset = Accounts.change_user_registration(user)
         {:noreply, socket |> assign(trigger_submit: true) |> assign_form(changeset)}
