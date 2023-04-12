@@ -8,6 +8,8 @@ defmodule MissedU.Connections.Profile do
 
     belongs_to :user, MissedU.Accounts.User
 
+    has_many :traces, MissedU.Connections.Trace
+
     timestamps()
   end
 
