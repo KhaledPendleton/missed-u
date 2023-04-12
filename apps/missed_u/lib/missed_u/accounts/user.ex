@@ -8,6 +8,8 @@ defmodule MissedU.Accounts.User do
     field :hashed_password, :string, redact: true
     field :confirmed_at, :naive_datetime
 
+    has_one :profile, MissedU.Connections.Profile
+
     timestamps()
   end
 
