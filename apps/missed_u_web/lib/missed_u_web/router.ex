@@ -23,6 +23,16 @@ defmodule MissedUWeb.Router do
     get "/", PageController, :home
   end
 
+  scope "/", MissedUWeb do
+    pipe_through [:browser, :require_authenticated_user]
+
+    live_session :connection_session,
+      on_mount: [{MissedUWeb.UserAuth, :ensure_authenticated}] do
+      live "/app", AppLive
+      live "/traces/new", TraceLive
+    end
+  end
+
   # Other scopes may use custom stacks.
   # scope "/api", MissedUWeb do
   #   pipe_through :api
