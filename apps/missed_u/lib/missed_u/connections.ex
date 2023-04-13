@@ -10,7 +10,8 @@ defmodule MissedU.Connections do
   end
 
   def load_profile(%Accounts.User{} = user) do
-    Repo.preload(user, [:profile])
+    %Accounts.User{profile: profile} = Repo.preload(user, [:profile])
+    profile
   end
 
   def create_trace(%{"author_profile" => profile} = attrs) do
