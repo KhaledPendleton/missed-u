@@ -8,7 +8,9 @@ defmodule MissedU.Connections.Profile do
 
     belongs_to :user, MissedU.Accounts.User
 
-    has_many :traces, MissedU.Connections.Trace
+    has_many :traces, MissedU.Connections.Trace,
+      foreign_key: :author_id,
+      references: :id
 
     timestamps()
   end
