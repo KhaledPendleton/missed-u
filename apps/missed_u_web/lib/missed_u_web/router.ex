@@ -29,7 +29,6 @@ defmodule MissedUWeb.Router do
     live_session :connection_session,
       on_mount: [{MissedUWeb.UserAuth, :ensure_authenticated}] do
       live "/app", AppLive
-      live "/traces/new", TraceLive
     end
   end
 
