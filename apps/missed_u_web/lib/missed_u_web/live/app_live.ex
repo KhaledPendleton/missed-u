@@ -1,6 +1,8 @@
 defmodule MissedUWeb.AppLive do
   use MissedUWeb, :live_view
 
+  alias MissedU.Connections.Trace
+
   def render(assigns) do
     ~H"""
     <h1 class="text-4xl font-black">Welcome, <%= @profile.name %></h1>
@@ -13,11 +15,7 @@ defmodule MissedUWeb.AppLive do
         <section>
           <p>
             <%= display_total_trace_count(@nearby_count) %> in this area.
-            <.link
-              navigate={~p"/traces/new?latitude=#{@position.latitude}&longitude=#{@position.longitude}"}
-              class="underline">
-              Leave a trace
-            </.link>.
+            <.link_button phx-click={show_modal("trace-form-modal")}>Leave a trace</.link_button>
           </p>
 
           <.simple_form for={@key_form} phx-submit="unlock">
@@ -27,31 +25,77 @@ defmodule MissedUWeb.AppLive do
             </:actions>
           </.simple_form>
 
-          <%= if !is_nil(@unlocked_traces) do %>
-            <ul>
-              <%= for trace <- @unlocked_traces do %>
-                <li id={"unlocked-trace:#{trace.id}"}>
-                  <img src={trace.photo_url} alt={"ID:#{trace.id}'s trace photo"}>
-                  <.button phx-click="connect" phx-value-trace-id={trace.id}>Connect</.button>
-                </li>
-              <% end %>
-            </ul>
-          <% end %>
+          <.trace_list traces={@unlocked_traces} />
         </section>
       <% end %>
     </div>
+
+    <.modal id="trace-form-modal" on_cancel={JS.dispatch("reset-fields", to: "#trace-form")}>
+      <h1 class="text-4xl font-black">Leave a trace</h1>
+
+      <.simple_form
+        id="trace-form"
+        for={@trace_form}
+        phx-submit="leave-trace"
+        phx-hook="FormManager"
+        data-after-submit={hide_modal("trace-form-modal")}
+      >
+        <.input field={@trace_form[:key]} label="Key"/>
+        <.input field={@trace_form[:photo_url]} label="Photo URL"/>
+        <input type="reset" class="hidden">
+
+        <:actions>
+          <.button>Leave Trace</.button>
+        </:actions>
+      </.simple_form>
+    </.modal>
+    """
+  end
+
+  attr :traces, :list, default: [], doc: "list of traces"
+
+  def trace_list(assigns) do
+    ~H"""
+    <%= if Enum.count(@traces) > 0 do %>
+      <ul>
+        <%= for trace <- @traces do %>
+          <.trace_list_item trace={trace} />
+        <% end %>
+      </ul>
+    <% end %>
+    """
+  end
+
+  attr :trace, :map, required: true, doc: "the trace"
+
+  def trace_list_item(assigns) do
+    ~H"""
+    <li id={"unlocked-trace:#{@trace.id}"}>
+      <img src={@trace.photo_url} alt={"ID:#{@trace.id}'s trace photo"}>
+      <.button phx-click="connect" phx-value-trace-id={@trace.id}>Connect</.button>
+    </li>
+    """
+  end
+
+  attr :rest, :global, include: ~w(disabled form name value)
+  slot :inner_block, required: true
+
+  def link_button(assigns) do
+    ~H"""
+    <button class="underline" {@rest}>
+      <%= render_slot(@inner_block) %>
+    </button>
     """
   end
 
   def mount(_params, _session, socket) do
-    user = MissedU.Connections.load_profile(socket.assigns.current_user)
-
     {:ok,
       socket
-      |> assign(:profile, user.profile)
       |> assign(:position, nil)
-      |> assign(:key_form, nil)
-      |> assign(:unlocked_traces, nil)}
+      |> assign(:unlocked_traces, [])
+      |> assign(:trace_form, trace_form())
+      |> assign(:key_form, unlock_key_form())
+      |> assign(:profile, MissedU.Connections.load_profile(socket.assigns.current_user))}
   end
 
   def handle_event("location:updated-position", %{"latitude" => lat, "longitude" => lon}, socket) do
@@ -62,7 +106,7 @@ defmodule MissedUWeb.AppLive do
       |> put_flash(:info, "Updated position: (#{lat}, #{lon})")
       |> assign(:nearby_count, nearby_count)
       |> assign(:position, %{latitude: lat, longitude: lon})
-      |> assign(:key_form, to_form(%{"value" => ""}, as: :unlock_key))}
+      |> assign(:key_form, unlock_key_form())}
   end
 
   def handle_event("unlock", %{"unlock_key" => %{"value" => key}}, socket) do
@@ -79,6 +123,28 @@ defmodule MissedUWeb.AppLive do
     {:noreply, socket}
   end
 
+  def handle_event("leave-trace", %{"trace" => trace_params}, socket) do
+    %{latitude: lat, longitude: lon} = socket.assigns.position
+
+    trace_params =
+      trace_params
+      |> Map.put("latitude", lat)
+      |> Map.put("longitude", lon)
+      |> Map.put("author_profile", socket.assigns.profile)
+
+    %MissedU.Connections.Trace{} = MissedU.Connections.create_trace(trace_params)
+
+    {:noreply, push_event(socket, "after-submit", %{id: "trace-form"})}
+  end
+
+  defp unlock_key_form do
+    to_form(%{"value" => ""}, as: :unlock_key)
+  end
+
+  defp trace_form do
+    to_form(Trace.changeset(%Trace{}, %{}), as: :trace)
+  end
+
   defp display_total_trace_count(count) when is_integer(count) do
     case count do
       0 -> "No one has left a trace"
@@ -92,10 +158,5 @@ defmodule MissedUWeb.AppLive do
       1 -> "one trace"
       n -> "#{n} traces"
     end
-  end
-
-  defp to_float(term) when is_binary(term) do
-    {float, _} = Float.parse(term)
-    float
   end
 end
